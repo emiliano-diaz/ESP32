@@ -1,0 +1,108 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "driver/spi_master.h"
+#include "driver/gpio.h"
+#include "esp_lcd_panel_ops.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_panel_io.h"
+
+static const char *TAG = "ESP32_3248S035_EXAMPLE";
+
+// ** ¡IMPORTANTE! **
+// Debes identificar la biblioteca específica que vas a usar para esta pantalla.
+// A menudo se utiliza ESP-IDF ili9XXX component o librerías similares.
+// Las siguientes definiciones de pines son GENÉRICAS y pueden NO ser correctas para tu módulo.
+// Consulta la documentación o el esquema de tu ESP32-3248S035 para los pines correctos.
+
+#define LCD_HOST              SPI2_HOST
+#define LCD_PIN_NUM_MOSI      GPIO_NUM_23
+#define LCD_PIN_NUM_MISO      GPIO_NUM_19 // Puede no estar conectado en algunos módulos
+#define LCD_PIN_NUM_CLK       GPIO_NUM_18
+#define LCD_PIN_NUM_CS        GPIO_NUM_5
+#define LCD_PIN_NUM_DC        GPIO_NUM_16
+#define LCD_PIN_NUM_RST       GPIO_NUM_17
+#define LCD_PIN_NUM_BCKL      GPIO_NUM_21 // Pin de control de la luz de fondo (opcional)
+
+void app_main(void) {
+    ESP_LOGI(TAG, "Inicializando la pantalla ESP32-3248S035...");
+
+    spi_bus_config_t buscfg = {
+        .miso_io_num = LCD_PIN_NUM_MISO,
+        .mosi_io_num = LCD_PIN_NUM_MOSI,
+        .sclk_io_num = LCD_PIN_NUM_CLK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .max_transfer_sz = 320 * 240 * 2 + 8, // Tamaño máximo de transferencia (depende de la resolución y el formato de color)
+    };
+
+    spi_device_interface_config_t devcfg = {
+        .clock_speed_hz = 26 * 1000 * 1000, // Velocidad del reloj SPI (ajusta según la especificación de la pantalla)
+        .mode = 0,                          // Modo SPI (consulta la especificación de la pantalla)
+        .spics_io_num = LCD_PIN_NUM_CS,     // Pin CS (Chip Select)
+        .queue_size = 7,
+        .flags = SPI_DEVICE_NO_DUMMY,
+    };
+
+    spi_bus_handle_t spi_handle;
+    esp_err_t ret = spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al inicializar el bus SPI: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    spi_device_handle_t spi_dev_handle;
+    ret = spi_bus_add_device(LCD_HOST, &devcfg, &spi_dev_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al agregar el dispositivo SPI: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI(TAG, "Bus SPI inicializado.");
+
+    // ** Inicialización específica del panel LCD **
+    // Aquí es donde necesitarás usar las funciones de la biblioteca que elijas
+    // para inicializar el controlador de la pantalla (ej: ILI9341).
+    // Esto puede incluir comandos para resetear, configurar la orientación,
+    // el formato de color, etc.
+
+    gpio_config_t io_conf;
+    // Configuración del pin de Data/Command (DC)
+    io_conf.pin_bit_mask = (1ULL << LCD_PIN_NUM_DC);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al configurar el pin DC: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    // Configuración del pin de Reset (RST)
+    io_conf.pin_bit_mask = (1ULL << LCD_PIN_NUM_RST);
+    ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error al configurar el pin RST: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    // ** Ejemplo genérico de secuencia de inicialización (PUEDE NO SER CORRECTO) **
+    gpio_set_level(LCD_PIN_NUM_RST, 0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    gpio_set_level(LCD_PIN_NUM_RST, 1);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // ** Aquí irían los comandos específicos de inicialización del controlador de la pantalla **
+    // Por ejemplo, si el controlador es ILI9341, buscarías una secuencia de inicialización para ese chip.
+    // Esto implicaría enviar comandos (a través del pin DC en bajo) y datos (a través del pin DC en alto) por SPI.
+
+    ESP_LOGI(TAG, "Pantalla inicializada (requiere configuración específica del controlador).");
+
+    // ** Después de la inicialización, podrías empezar a dibujar en la pantalla **
+    // Esto también dependerá de la biblioteca que utilices.
+    // Por ejemplo, podrías tener funciones para dibujar píxeles, líneas, rectángulos, texto, etc.
+
+    ESP_LOGI(TAG, "¡Listo para dibujar en la pantalla!");
+}
